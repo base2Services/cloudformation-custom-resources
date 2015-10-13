@@ -5,3 +5,4 @@ This project will contain the code and configuration to deploy various Cloudform
 Here is a list of the
 
 1. [Lookup AMI by Name](lookup-ami/README.md)
+1. [Lookup NS records by domain name](lookup-ns-records/README.md)
