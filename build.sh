@@ -14,8 +14,8 @@ fi
 
 mkdir -p dist/
 npm install
-zip -r dist/ccr-$BUILD_NUMBER.zip src/ node_modules/
+tar cfvz -r dist/ccr-$BUILD_NUMBER.tar.gz src/ node_modules/
 
 if [[ "x" != "x$S3_BUCKET" ]]; then
-  aws s3 cp dist/cloudformation-custom-resouces-$BUILD_NUMBER.zip s3://${S3_BUCKET}/build/ --acl public-read --region $S3_REGION
+  aws s3 cp dist/cloudformation-custom-resouces-$BUILD_NUMBER.tar.gz s3://${S3_BUCKET}/build/ --acl public-read --region $S3_REGION
 fi
