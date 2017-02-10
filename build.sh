@@ -5,7 +5,7 @@ S3_BUCKET=$2
 S3_REGION=$3
 
 if [[ "x" == "x$BUILD_NUMBER" ]]; then
-  BUILD_NUMBER="dev"
+  BUILD_NUMBER="`cat package.json | jq '.version' -r`"
 fi
 
 if [[ "x" == "x$S3_REGION" ]]; then
