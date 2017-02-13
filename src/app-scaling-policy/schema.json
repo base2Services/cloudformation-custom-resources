@@ -2,12 +2,12 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "type": "object",
   "required": [
-    "AppScalingPolicy"
+    "PolicyName",
+    "ResourceId",
+    "ScalableDimension",
+    "ServiceNamespace"
   ],
   "properties": {
-    "AppScalingPolicy": {
-      "type": "object"
-    },
     "PolicyName": {
       "type": "string"
     },
