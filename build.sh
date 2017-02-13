@@ -15,7 +15,7 @@ fi
 mkdir -p dist/
 npm install
 
-apt-get update -y && apt-get install -y zip
+sudo apt-get update -y && sudo apt-get install -y zip
 zip -r dist/ccr-$BUILD_NUMBER.zip src/ node_modules/
 
 if [[ "x" != "x$S3_BUCKET" ]]; then
