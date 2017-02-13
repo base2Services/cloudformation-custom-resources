@@ -11,7 +11,7 @@ var Delete = CfnLambda.SDKAlias({
   api: APPASG,
   method: 'deleteScalingPolicy',
   keys: ['PolicyName', 'ResourceId', 'ScalableDimension', 'ServiceNamespace'],
-  ignoreErrorCodes: [404, 409]
+  ignoreErrorCodes: [400, 404, 409]
 });
 
 var Create = CfnLambda.SDKAlias({
