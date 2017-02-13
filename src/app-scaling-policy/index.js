@@ -10,6 +10,7 @@ var APPASG = new AWS.ApplicationAutoScaling({apiVersion: '2016-02-06'});
 var Delete = CfnLambda.SDKAlias({
   api: APPASG,
   method: 'deleteScalingPolicy',
+  keys: ['PolicyName', 'ResourceId', 'ScalableDimension', 'ServiceNamespace'],
   ignoreErrorCodes: [404, 409]
 });
 
