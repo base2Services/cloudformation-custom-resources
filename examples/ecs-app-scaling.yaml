@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample template
+
+Parameters:
+  SourceBucket:
+    Type: String
+    Default: cloudformation-custom-resouces.base2.services
+    Description: S3 Bucket containing the lambda function
+  SourceVersion:
+    Type: String
+    Default: latest
+    Description: The custom resource version
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+            - application-autoscaling.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - application-autoscaling:*
+            - ecs:*
+            - cloudwatch:DescribeAlarms
+            - iam:PassRole
+            Resource: "*"
+
+  AppScalingPolicyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref SourceBucket
+        S3Key: !Sub "build/ccr-${SourceVersion}.zip"
+      Handler: "src/app-scaling-policy/index.handler"
+      Runtime: nodejs4.3
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+  AppScalingTargetFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref SourceBucket
+        S3Key: !Sub "build/ccr-${SourceVersion}.zip"
+      Handler: "src/app-scaling-target/index.handler"
+      Runtime: nodejs4.3
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+  AppScalingTargetExample:
+    Type: Custom::AppScalingTarget
+    Properties:
+      ServiceToken: !GetAtt AppScalingTargetFunction.Arn
+      ResourceId: service/default/sample-webapp
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 1
+      MaxCapacity: 10
+      RoleARN: !GetAtt LambdaExecutionRole.Arn
+
+  AppScalingPolicyExample:
+    Type: Custom::AppScalingPolicy
+    DependsOn: AppScalingTargetExample
+    Properties:
+      ServiceToken: !GetAtt AppScalingPolicyFunction.Arn
+      PolicyName: web-app-cpu-gt-75
+      ResourceId: service/default/sample-webapp
+      PolicyType: StepScaling
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 0
+        # MetricAggregationType:
+        # MinAdjustmentMagnitude:
+        StepAdjustments:
+          -
+            ScalingAdjustment: 200
+            MetricIntervalLowerBound: 0
+            # MetricIntervalUpperBound: 0
