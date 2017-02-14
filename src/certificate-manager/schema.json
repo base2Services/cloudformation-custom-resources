@@ -2,30 +2,30 @@
   "$schema": "http://json-schema.org/draft-04/schema#",
   "type": "object",
   "required": [
-    "PolicyName",
-    "ResourceId",
-    "ScalableDimension",
-    "ServiceNamespace"
+    "DomainName"
   ],
   "properties": {
-    "PolicyName": {
+    "DomainName": {
       "type": "string"
     },
-    "ResourceId": {
+    "SubjectAlternativeNames": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "IdempotencyToken": {
       "type": "string"
     },
-    "ScalableDimension": {
-      "type": "string"
-    },
-    "ServiceNamespace": {
-      "type": "string"
-    },
-    "PolicyType": {
-      "type": "string"
-    },
-    "StepScalingPolicyConfiguration": {
-      "type": "string"
+    "DomainValidationOptions": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "uniqueItems": true
     }
-
   }
 }
