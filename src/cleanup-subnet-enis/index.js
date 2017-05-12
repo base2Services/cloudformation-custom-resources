@@ -8,9 +8,7 @@ const CleanupLogic = require('./eniCleanupLogic');
 
 //Clean up S3 bucket
 var Delete = (requestPhysicalID, cfnRequestParams, reply) => {
-    new CleanupLogic(cfnRequestParams.SubnetIds, function() {
-        reply(null, requestPhysicalID);
-    }, function(err) {
+    new CleanupLogic(cfnRequestParams.SubnetIds, function(err, data) {
         reply(err, requestPhysicalID);
     }).cleanupEnis();
 };
