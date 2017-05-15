@@ -12,8 +12,12 @@ class EniCleanupLogic {
     //store handler and bucket name locally
     constructor(subnetIds, handler) {
         this.subnetIds = subnetIds;
-        this.successHandler = (data) => { handler(null, data) };
-        this.errorHandler = (err) => { handler(err, null); }
+        this.successHandler = (data) => {
+            handler(null, data)
+        };
+        this.errorHandler = (err) => {
+            handler(err, null);
+        }
         this.enis = {};
     }
 
@@ -35,8 +39,41 @@ class EniCleanupLogic {
         }
     }
 
+
+    //delete eni
+    deleteEni(eniInfo) {
+        var self = this;
+        console.log("ENI Info:");
+        console.log(JSON.stringify(eniInfo));
+        if (eniInfo.Status == 'in-use') {
+            ec2.detachNetworkInterface({
+                AttachmentId: eniInfo.Attachment.AttachmentId
+            }, (err, data) => {
+                if (err) {
+                    console.error(err);
+                    self.errorHandler(err);
+                    return;
+                }
+                //call recursivly, allowing 5 seconds to timeout
+                console.log(`Detached ENI ${eniInfo.NetworkInterfaceId}, allowing 5s to detach..`);
+                setTimeout(() => { self.cleanupEnis(eniInfo.NetworkInterfaceId); }, 5000);
+                return;
+            });
+            return;
+        }
+        if (eniInfo.Status != 'available') {
+            console.log(`ENI is neither in use, nor available, in state: ${eniInfo.status}, sleeping for 5 seconds..`);
+            setTimeout(() => { self.cleanupEnis(eniInfo.NetworkInterfaceId); }, 5000);
+            return;
+        }
+        //delete eni
+        ec2.deleteNetworkInterface({ NetworkInterfaceId: eniInfo.NetworkInterfaceId },
+            self.deleteEniHandler(eniInfo.NetworkInterfaceId)
+        );
+    }
+
     //list enis handler
-    deleteEnis() {
+    listENIsHandler() {
         var self = this;
         return (err, data) => {
             if (err) {
@@ -54,21 +91,25 @@ class EniCleanupLogic {
             //delete each ENI
             data.NetworkInterfaces.forEach((iface) => {
                 self.enis[iface.NetworkInterfaceId] = true;
-                console.log(`Starting deletion of ${iface.NetworkInterfaceId}`);
-                ec2.deleteNetworkInterface({ NetworkInterfaceId: iface.NetworkInterfaceId },
-                    self.deleteEniHandler(iface.NetworkInterfaceId)
-                );
+                self.deleteEni.call(self, iface);
             });
         }
     }
 
     //list enis
-    listEnis() {
+    listEnis(interfaceId) {
         let self = this;
         console.log(`Retrieving ENIs in subnets ${self.subnetIds}`);
-        ec2.describeNetworkInterfaces({
-            Filters: [{ Name: 'subnet-id', Values: self.subnetIds }]
-        }, self.deleteEnis());
+        let params = {
+            Filters: [{
+                Name: 'subnet-id',
+                Values: self.subnetIds
+            }]
+        };
+        if (interfaceId) {
+            params.Filters.push({ Name: 'network-interface-id', Values: [interfaceId] });
+        }
+        ec2.describeNetworkInterfaces(params, self.listENIsHandler());
     }
 
     cleanupEnis() {
