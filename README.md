@@ -53,3 +53,15 @@ for all 3 operations - CREATE, UPDATE and DELETE.
 - - `zoneId` - Route53 zone id where record should be created (PRs welcome to move from zoneId to ZoneName)
 - - `type` - DNS Record type, e.g. `A`, `CNAME` ...
 - - `value` - Actual value of DNS record
+
+
+### Reading values from JSON file on S3 bucket
+
+Reads values from JSON file placed in S3 bucket, allowing this values to be referenced in other resources.
+Example of creating s3 bucket with name specified within JSON file can be found in `src/read-s3-json-file/cf_template_example.json`
+
+handler: `src/read-s3-json-file/index.handler`
+
+Required parameters:
+- `Bucket` - name of bucket where configuration file resides
+- `Key` - key within bucket of configuration file

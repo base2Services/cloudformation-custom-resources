@@ -15,8 +15,8 @@ fi
 mkdir -p dist/
 npm install
 
-sudo apt-get update -y && sudo apt-get install -y zip
-zip -r dist/ccr-$BUILD_NUMBER.zip src/ node_modules/
+#sudo apt-get update -y && sudo apt-get install -y zip
+zip -r dist/ccr-$BUILD_NUMBER.zip src/ node_modules/s
 
 if [[ "x" != "x$S3_BUCKET" ]]; then
   aws s3 cp dist/ccr-$BUILD_NUMBER.zip s3://${S3_BUCKET}/build/ccr-$BUILD_NUMBER.zip --region $S3_REGION
