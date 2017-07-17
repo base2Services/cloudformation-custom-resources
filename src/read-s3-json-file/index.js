@@ -7,8 +7,15 @@ const CfnLambda = require('cfn-lambda');
 const AWS = require('aws-sdk');
 
 Logic = {
-    ReadS3Json: function (bucket, key, callback) {
-        var s3 = new AWS.S3();
+    ReadS3Json: function (params, key, callback) {
+        let bucket = params.Bucket,
+            key = params.Key,
+            s3 = new AWS.S3();
+
+        if(params.Region){
+            s3 = new AWS.S3({region: params.Region})
+        }
+
         s3.getObject({Bucket: bucket, Key: key}, function (err, data) {
             if (err) {
                 //return error
@@ -29,7 +36,7 @@ Logic = {
 
 // return json file properties
 var Create = (cfnRequestParams, reply) => {
-    Logic.ReadS3Json(cfnRequestParams.Bucket, cfnRequestParams.Key, function (err, data) {
+    Logic.ReadS3Json(cfnRequestParams, function (err, data) {
         if (err) {
             reply(err, `s3-${cfnRequestParams.Bucket}-${cfnRequestParams.Key}`)
         } else {
@@ -40,7 +47,7 @@ var Create = (cfnRequestParams, reply) => {
 
 // return json file properties
 var Update = (requestPhysicalID, cfnRequestParams, oldCfnRequestParams, reply) => {
-    Logic.ReadS3Json(cfnRequestParams.Bucket, cfnRequestParams.Key, function (err, data) {
+    Logic.ReadS3Json(cfnRequestParams, function (err, data) {
         if (err) {
             reply(err, requestPhysicalID)
         } else {
@@ -51,7 +58,7 @@ var Update = (requestPhysicalID, cfnRequestParams, oldCfnRequestParams, reply) =
 
 // return json file properties
 var Delete = (requestPhysicalID, cfnRequestParams, reply) => {
-    Logic.ReadS3Json(cfnRequestParams.Bucket, cfnRequestParams.Key, function (err, data) {
+    Logic.ReadS3Json(cfnRequestParams, function (err, data) {
         if (err) {
             reply(err, requestPhysicalID)
         } else {
