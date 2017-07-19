@@ -15,7 +15,7 @@ Logic = {
         if(params.Region){
             s3 = new AWS.S3({region: params.Region})
         }
-
+        console.log(`Reading configuration from s3://${bucket}/${key}`);
         s3.getObject({Bucket: bucket, Key: key}, function (err, data) {
             if (err) {
                 //return error
@@ -24,7 +24,9 @@ Logic = {
             else {
                 //try parsing json file
                 try {
-                    callback(null, JSON.parse(data.Body.toString()))
+                    let configurationObject = JSON.parse(data.Body.toString());
+                    console.log(`Passing following configuration back to stack:\n${JSON.stringify(configurationObject,null,2)}`);
+                    callback(null, configurationObject);
                 } catch (err) {
                     callback(err, null)
                 }
