@@ -7,7 +7,7 @@ const CfnLambda = require('cfn-lambda');
 const AWS = require('aws-sdk');
 
 Logic = {
-    ReadS3Json: function (params, key, callback) {
+    ReadS3Json: function (params, callback) {
         let bucket = params.Bucket,
             key = params.Key,
             s3 = new AWS.S3();
