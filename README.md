@@ -65,3 +65,10 @@ handler: `src/read-s3-json-file/index.handler`
 Required parameters:
 - `Bucket` - name of bucket where configuration file resides
 - `Key` - key within bucket of configuration file
+
+Optional parameters:
+- `EnsureKeys` - comma separated list of keys that are always returned out of custom resource. This ensures your 
+   Cloud formation does not break if property that does not exist in JSON file is passed around the stack. Key values
+   will default to empty string, or value of `EmptyKeyDefaultValue` parameter
+   
+- `EmptyKeyDefaultValue` value for keys not present in JSON file and requested by `EnsureKeys` 

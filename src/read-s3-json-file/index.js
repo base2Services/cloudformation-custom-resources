@@ -1,18 +1,18 @@
 /**
  * A Lambda function that returns data read from JSON file on S3 bucket
  **/
-
+"use strict";
 
 const CfnLambda = require('cfn-lambda');
 const AWS = require('aws-sdk');
 
-Logic = {
+const Logic = {
     ReadS3Json: function (params, callback) {
         let bucket = params.Bucket,
             key = params.Key,
             s3 = new AWS.S3();
 
-        if(params.Region){
+        if (params.Region) {
             s3 = new AWS.S3({region: params.Region})
         }
         console.log(`Reading configuration from s3://${bucket}/${key}`);
@@ -25,7 +25,19 @@ Logic = {
                 //try parsing json file
                 try {
                     let configurationObject = JSON.parse(data.Body.toString());
-                    console.log(`Passing following configuration back to stack:\n${JSON.stringify(configurationObject,null,2)}`);
+
+                    //allow empty values for keys that are required to always be present in configuration object
+                    if (params.EnsureKeys) {
+                        params.EnsureKeys.split(',').forEach((k) => {
+                            if (configurationObject[k] === undefined) {
+                                let defaultValue = params.EmptyKeyDefaultValue ? params.EmptyKeyDefaultValue : '';
+                                configurationObject[k] = defaultValue;
+                            }
+                        });
+                    }
+
+                    console.log(`Passing following configuration back to stack:\n${JSON.stringify(configurationObject, null, 2)}`);
+
                     callback(null, configurationObject);
                 } catch (err) {
                     callback(err, null)
@@ -37,7 +49,7 @@ Logic = {
 
 
 // return json file properties
-var Create = (cfnRequestParams, reply) => {
+const Create = (cfnRequestParams, reply) => {
     Logic.ReadS3Json(cfnRequestParams, function (err, data) {
         if (err) {
             reply(err, `s3-${cfnRequestParams.Bucket}-${cfnRequestParams.Key}`)
@@ -48,7 +60,7 @@ var Create = (cfnRequestParams, reply) => {
 };
 
 // return json file properties
-var Update = (requestPhysicalID, cfnRequestParams, oldCfnRequestParams, reply) => {
+const Update = (requestPhysicalID, cfnRequestParams, oldCfnRequestParams, reply) => {
     Logic.ReadS3Json(cfnRequestParams, function (err, data) {
         if (err) {
             reply(err, requestPhysicalID)
@@ -59,7 +71,7 @@ var Update = (requestPhysicalID, cfnRequestParams, oldCfnRequestParams, reply) =
 };
 
 // return json file properties
-var Delete = (requestPhysicalID, cfnRequestParams, reply) => {
+const Delete = (requestPhysicalID, cfnRequestParams, reply) => {
     Logic.ReadS3Json(cfnRequestParams, function (err, data) {
         if (err) {
             reply(err, requestPhysicalID)
