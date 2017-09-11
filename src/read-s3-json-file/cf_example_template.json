@@ -34,7 +34,14 @@
         },
         "Key": {
           "Ref": "ConfigurationS3Key"
-        }
+        },
+        "EnsureKeys": {
+          "Fn::Join":[
+            ",",
+            ["DummyKey1","DummyKey2"]
+          ]
+        },
+        "EmptyKeyDefaultValue":"false"
       }
     },
     "BucketWithNameFromS3": {
@@ -46,6 +53,24 @@
             "NameOfTheBucketToBeCreated"
           ]
         }
+      }
+    }
+  },
+  "Outputs": {
+    "DummyOutput1":{
+      "Value": {
+        "Fn::GetAtt":[
+          "StackConfiguration",
+          "DummyKey1"
+        ]
+      }
+    },
+    "DummyOutput2":{
+      "Value": {
+        "Fn::GetAtt":[
+          "StackConfiguration",
+          "DummyKey2"
+        ]
       }
     }
   }
