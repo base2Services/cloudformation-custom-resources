@@ -46,6 +46,16 @@ class EniCleanupLogic {
         console.log("ENI Info:");
         console.log(JSON.stringify(eniInfo));
         if (eniInfo.Status == 'in-use') {
+            //check if status is in use, by detachment is in progress
+            if (eniInfo.Attachment.Status == 'detaching') {
+                console.log(`Eni ${eniInfo.NetworkInterfaceId} in use, but attachment` +
+                    `${eniInfo.Attachment.AttachmentId} is being detached, waiting for 5 seconds...`);
+                setTimeout(() => {
+                    self.cleanupEnis(eniInfo.NetworkInterfaceId);
+                }, 5000);
+                return;
+            }
+            //ENI still attached, started detachment process
             ec2.detachNetworkInterface({
                 AttachmentId: eniInfo.Attachment.AttachmentId
             }, (err, data) => {
@@ -56,18 +66,23 @@ class EniCleanupLogic {
                 }
                 //call recursivly, allowing 5 seconds to timeout
                 console.log(`Detached ENI ${eniInfo.NetworkInterfaceId}, allowing 5s to detach..`);
-                setTimeout(() => { self.cleanupEnis(eniInfo.NetworkInterfaceId); }, 5000);
+                setTimeout(() => {
+                    self.cleanupEnis(eniInfo.NetworkInterfaceId);
+                }, 5000);
                 return;
             });
             return;
         }
+        //good be that whole ENI is in detaching state
         if (eniInfo.Status != 'available') {
             console.log(`ENI is neither in use, nor available, in state: ${eniInfo.status}, sleeping for 5 seconds..`);
-            setTimeout(() => { self.cleanupEnis(eniInfo.NetworkInterfaceId); }, 5000);
+            setTimeout(() => {
+                self.cleanupEnis(eniInfo.NetworkInterfaceId);
+            }, 5000);
             return;
         }
-        //delete eni
-        ec2.deleteNetworkInterface({ NetworkInterfaceId: eniInfo.NetworkInterfaceId },
+        //delete eni if it has been detached
+        ec2.deleteNetworkInterface({NetworkInterfaceId: eniInfo.NetworkInterfaceId},
             self.deleteEniHandler(eniInfo.NetworkInterfaceId)
         );
     }
@@ -107,7 +122,7 @@ class EniCleanupLogic {
             }]
         };
         if (interfaceId) {
-            params.Filters.push({ Name: 'network-interface-id', Values: [interfaceId] });
+            params.Filters.push({Name: 'network-interface-id', Values: [interfaceId]});
         }
         ec2.describeNetworkInterfaces(params, self.listENIsHandler());
     }
