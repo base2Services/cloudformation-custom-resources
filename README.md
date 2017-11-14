@@ -72,3 +72,28 @@ Optional parameters:
    will default to empty string, or value of `EmptyKeyDefaultValue` parameter
    
 - `EmptyKeyDefaultValue` value for keys not present in JSON file and requested by `EnsureKeys` 
+
+### Creating cloudformation stack in specific region
+
+It is easy to create sub-stacks in CloudFormation as long as they are in same region.
+In some cases, there is need to create stack in region different than region where
+parent stack is being create, or for example, to create same stack in multiple regions.
+Such (sub)stack lifecycle can be controlled via custom resource having it's code in 
+`src/regional-cfn-stack` folder
+
+handler: `src/regional-cfn-stack/handler.lambda_handler`
+runtime: `python3.6`
+
+Required parameters:
+- `Region` - AWS Region to create stack in
+- `StackName` - Name of the stack to be created
+- `TemplateUrl` - S3 Url of stack template
+- `Capabilities` - Comma seperated list of capabilities. Set to empty value 
+if no IAM capabilities required.
+
+Optional parameters:
+- `StackParam_Key` - Will pass value of this param down to stack's `Key` parameter
+- `OnFailure` - Behaviour on stack creation failure. Accepted values are `DO_NOTHING`,`ROLLBACK` and `DELETE`
+
+
+
