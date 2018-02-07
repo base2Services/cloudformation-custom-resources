@@ -1,6 +1,6 @@
 {
   "name": "cloudformation-custom-resouces",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "base2 custom cloudformation resources",
   "private": "true",
   "devDependencies": {
