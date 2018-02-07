@@ -28,21 +28,40 @@ class StackManagement:
         )
         return response['StackId']
     
+    def stack_exists(selfs, region, stack_id):
+        cfn_client = boto3.client('cloudformation', region_name=region)
+        try:
+            tack_details = cfn_client.describe_stacks(StackName=stack_id)['Stacks'][0]
+            return True
+        except Exception as e:
+            if 'does not exist' in e.response['Error']['Message']:
+                return False
+            else:
+                raise e
+        
     def update(self, region, stack_id, url, params, capabilities):
         cfn_client = boto3.client('cloudformation', region_name=region)
-        s_params = reduce(lambda x, y: f"\t\t{x[0]}={x[1]}\ny", params.items(), '')
+        s_params = params
         
         # log stack update info
         print(f"Updating stack\n\t" +
               f"StackId:{stack_id}\n\tTemplate:{url}\n\tParams:{s_params}\n\tCapabilities:{capabilities}")
-        
-        response = cfn_client.update_stack(
-            StackName=stack_id,
-            TemplateBody=url,
-            Parameters=list(map(lambda x: {'ParameterKey': x[0], 'ParameterValue': x[1]}, params.items())),
-            Capabilities=capabilities
-        )
-        return response['StackId']
+        try:
+            response = cfn_client.update_stack(
+                StackName=stack_id,
+                TemplateURL=url,
+                Parameters=list(map(lambda x: {'ParameterKey': x[0], 'ParameterValue': x[1]}, params.items())),
+                Capabilities=capabilities
+            )
+        except Exception as e:
+            if (not 'Error' in e.response):
+                raise e
+            if (not 'Message' in e.response['Error']):
+                raise e
+            if (not 'No updates are to be performed' in e.response['Error']['Message']):
+                raise e
+                
+        return stack_id
     
     def delete(self, region, stack_id):
         cfn_client = boto3.client('cloudformation', region_name=region)

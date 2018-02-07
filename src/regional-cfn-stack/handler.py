@@ -8,9 +8,10 @@ sys.path.append(f"{os.environ['LAMBDA_TASK_ROOT']}/lib")
 import cr_response
 import stack_manage
 import lambda_invoker
+import traceback
 
 create_stack_success_states = ['CREATE_COMPLETE']
-update_stack_success_states = ['UPDATE_COMPLETE']
+update_stack_success_states = ['CREATE_COMPLETE', 'UPDATE_COMPLETE']
 delete_stack_success_states = ['DELETE_COMPLETE']
 
 create_stack_failure_states = ['CREATE_FAILED',
@@ -23,7 +24,11 @@ update_stack_failure_states = ['CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_FAILED'
 delete_stack_failure_states = ['DELETE_FAILED']
 
 
-def create_stack(payload):
+def create_update_stack(cmd, payload):
+    
+    if 'Capabilities' not in payload['ResourceProperties']:
+        payload['ResourceProperties']['Capabilities'] = 'CAPABILITY_IAM'
+    
     # compile stack parameters
     stack_params = {}
     for key, value in payload['ResourceProperties'].items():
@@ -38,31 +43,39 @@ def create_stack(payload):
     on_failure = 'DELETE'
     if 'OnFailure' in payload['ResourceProperties']:
         on_failure = payload['ResourceProperties']['OnFailure']
+
+    stack_id = ''
+    if cmd == 'create':
+        stack_id = manage.create(
+            payload['ResourceProperties']['Region'],
+            payload['ResourceProperties']['StackName'],
+            payload['ResourceProperties']['TemplateUrl'],
+            stack_params,
+            payload['ResourceProperties']['Capabilities'].split(','),
+            on_failure
+        )
+    elif cmd == 'update':
+        stack_id = payload['PhysicalResourceId']
+        manage.update(
+            payload['ResourceProperties']['Region'],
+            stack_id,
+            payload['ResourceProperties']['TemplateUrl'],
+            stack_params,
+            payload['ResourceProperties']['Capabilities'].split(','),
+        )
+    else:
+        raise 'Cmd must be create or update'
         
-    stack_id = manage.create(
-        payload['ResourceProperties']['Region'],
-        payload['ResourceProperties']['StackName'],
-        payload['ResourceProperties']['TemplateUrl'],
-        stack_params,
-        payload['ResourceProperties']['Capabilities'].split(','),
-        on_failure
-    )
-    
     return stack_id
 
 
-def update_stack(payload):
-    sts = boto3.client('sts')
-    account_id = sts.get_caller_identity()['Account']
-    metadata_key = payload['ResourceProperties']['MetadataKey']
-    return {"PhysicalResourceId": f"arn:aws:metadata:{account_id}:metadata/{metadata_key}"}
-
 
 def delete_stack(payload):
-    sts = boto3.client('sts')
-    account_id = sts.get_caller_identity()['Account']
-    metadata_key = payload['ResourceProperties']['MetadataKey']
-    return {"PhysicalResourceId": f"arn:aws:metadata:{account_id}:metadata/{metadata_key}"}
+    manage = stack_manage.StackManagement()
+    region = payload['ResourceProperties']['Region']
+    stack_id = payload['PhysicalResourceId']
+    manage.delete(region, payload['ResourceProperties']['StackName'])
+    return stack_id
 
 
 def wait_stack_states(success_states, failure_states, lambda_payload, lambda_context):
@@ -103,6 +116,28 @@ def wait_stack_states(success_states, failure_states, lambda_payload, lambda_con
 def lambda_handler(payload, context):
     # if lambda invoked to wait for stack status
     print(f"Received event:{json.dumps(payload)}")
+
+    # check if current region is elgiible for stack to be created
+    if 'EnabledRegions' in payload['ResourceProperties']:
+        region_list = payload['ResourceProperties']['EnabledRegions'].split(',')
+        current_region = payload['ResourceProperties']['Region']
+        print (f"EnabledRegions: {region_list}. Current region={current_region}")
+
+        if current_region not in region_list:
+            print(f"{current_region} not enabled, skipping")
+            # report success
+            cfn_response = cr_response.CustomResourceResponse(payload)
+            if 'PhysicalResourceId' in payload:
+                cfn_response.response['PhysicalResourceId'] = payload['PhysicalResourceId']
+            else:
+                id = f"Disabled{current_region.replace('-','')}{payload['ResourceProperties']['StackName']}"
+                cfn_response.response['PhysicalResourceId'] = id
+                
+            cfn_response.response['Status'] = 'SUCCESS'
+            cfn_response.respond()
+            return
+            
+    # lambda was invoked by itself
     if ('WaitComplete' in payload) and (payload['WaitComplete']):
         print("Waiting for stack status...")
         if payload['RequestType'] == 'Create':
@@ -115,18 +150,16 @@ def lambda_handler(payload, context):
         
         elif payload['RequestType'] == 'Update':
             wait_stack_states(
-                payload['PhysicalResourceId'],
-                create_stack_success_states,
-                create_stack_failure_states,
+                update_stack_success_states,
+                update_stack_failure_states,
                 payload,
                 context
             )
         
         elif payload['RequestType'] == 'Delete':
             wait_stack_states(
-                payload['PhysicalResourceId'],
-                create_stack_success_states,
-                create_stack_failure_states,
+                delete_stack_success_states,
+                delete_stack_failure_states,
                 payload,
                 context
             )
@@ -138,12 +171,23 @@ def lambda_handler(payload, context):
         stack_id = None
         try:
             if payload['RequestType'] == 'Create':
-                stack_id = create_stack(payload)
+                stack_id = create_update_stack('create', payload)
             elif payload['RequestType'] == 'Update':
-                stack_id = update_stack(payload)
+                stack_id = create_update_stack('update', payload)
             elif payload['RequestType'] == 'Delete':
-                stack_id = delete_stack(payload)
-            
+                # delete needs to check if stack exists first, and reply with success if not
+                manage = stack_manage.StackManagement()
+                stack_id = payload['PhysicalResourceId']
+                region = payload['ResourceProperties']['Region']
+                if not manage.stack_exists(region, stack_id):
+                    # reply with success
+                    cfn_response = cr_response.CustomResourceResponse(payload)
+                    cfn_response.response['Reason'] = 'CloudFormation stack has not been found, may be removed manually'
+                    cfn_response.respond()
+                    return
+                else:
+                    delete_stack(payload)
+                   
             # add marker to wait for execution and exit
             payload['PhysicalResourceId'] = stack_id
             payload['WaitComplete'] = True
@@ -152,11 +196,11 @@ def lambda_handler(payload, context):
         
         except Exception as e:
             print(f"Exception:{e}\n{str(e)}")
-            print(e.__traceback__)
+            print(traceback.format_exc())
             cfn_response = cr_response.CustomResourceResponse(payload)
             if 'PhysicalResourceId' in payload:
                 cfn_response.response['PhysicalResourceId'] = payload['PhysicalResourceId']
-            cfn_response.response['Status'] = 'FAILURE'
+            cfn_response.response['Status'] = 'FAILED'
             cfn_response.response['Reason'] = str(e)
             cfn_response.respond()
             raise e

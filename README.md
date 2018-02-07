@@ -88,8 +88,10 @@ Required parameters:
 - `Region` - AWS Region to create stack in
 - `StackName` - Name of the stack to be created
 - `TemplateUrl` - S3 Url of stack template
-- `Capabilities` - Comma seperated list of capabilities. Set to empty value 
-if no IAM capabilities required.
+- `Capabilities` - Comma seperated list of capabilities. Set to empty value if no IAM capabilities required.
+- `EnabledRegions` - Comma separated list of regions that stack is allowed to be created in.
+ Useful when passing this list is template parameters. 
+
 
 Optional parameters:
 - `StackParam_Key` - Will pass value of this param down to stack's `Key` parameter
