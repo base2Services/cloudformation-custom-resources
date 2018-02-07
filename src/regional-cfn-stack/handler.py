@@ -4,6 +4,7 @@ import os
 import sys
 
 sys.path.append(f"{os.environ['LAMBDA_TASK_ROOT']}/lib")
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 import cr_response
 import stack_manage
