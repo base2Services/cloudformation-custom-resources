@@ -28,10 +28,10 @@ class StackManagement:
         )
         return response['StackId']
     
-    def stack_exists(selfs, region, stack_id):
+    def stack_exists(selfs, region, stack_name):
         cfn_client = boto3.client('cloudformation', region_name=region)
         try:
-            stack_details = cfn_client.describe_stacks(StackName=stack_id)['Stacks'][0]
+            stack_details = cfn_client.describe_stacks(StackName=stack_name)['Stacks'][0]
             return stack_details['StackStatus'] != 'DELETE_COMPLETE'
         except Exception as e:
             if 'does not exist' in e.response['Error']['Message']:
@@ -87,7 +87,7 @@ class StackManagement:
                 return None
             else:
                 print(f"Waiting for 5 seconds, time remaining" +
-                      "in this lambda execution {lambda_context.get_remaining_time_in_millis()}ms")
+                      f"in this lambda execution {lambda_context.get_remaining_time_in_millis()}ms")
                 time.sleep(5)
 
     def get_failure_reason(self, region, stack_id):
