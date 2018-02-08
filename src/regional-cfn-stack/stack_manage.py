@@ -31,8 +31,8 @@ class StackManagement:
     def stack_exists(selfs, region, stack_id):
         cfn_client = boto3.client('cloudformation', region_name=region)
         try:
-            tack_details = cfn_client.describe_stacks(StackName=stack_id)['Stacks'][0]
-            return True
+            stack_details = cfn_client.describe_stacks(StackName=stack_id)['Stacks'][0]
+            return stack_details['StackStatus'] != 'DELETE_COMPLETE'
         except Exception as e:
             if 'does not exist' in e.response['Error']['Message']:
                 return False

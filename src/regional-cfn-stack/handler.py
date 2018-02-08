@@ -125,18 +125,35 @@ def lambda_handler(payload, context):
         print (f"EnabledRegions: {region_list}. Current region={current_region}")
 
         if current_region not in region_list:
-            print(f"{current_region} not enabled, skipping")
-            # report success
-            cfn_response = cr_response.CustomResourceResponse(payload)
-            if 'PhysicalResourceId' in payload:
-                cfn_response.response['PhysicalResourceId'] = payload['PhysicalResourceId']
-            else:
-                id = f"Disabled{current_region.replace('-','')}{payload['ResourceProperties']['StackName']}"
-                cfn_response.response['PhysicalResourceId'] = id
-                
-            cfn_response.response['Status'] = 'SUCCESS'
-            cfn_response.respond()
-            return
+            # if this is create request just skip
+            if payload['RequestType'] == 'Create':
+                print(f"{current_region} not enabled, skipping")
+                # report success
+                respond_disabled_region(payload)
+                return
+            
+            # use case: updated list of regions (removed element) when updating/deleting parent.
+            if payload['RequestType'] == 'Update' or payload['RequestType'] == 'Delete':
+                # if this is update or delete request we have to make sure stack is deleted if
+                # it was previously created
+                manage = stack_manage.StackManagement()
+                stack_id = payload['PhysicalResourceId']
+                region = payload['ResourceProperties']['Region']
+                if manage.stack_exists(region, stack_id):
+                    print(f"Received {payload['RequestType']} for disabled region {current_region}"
+                          f" and stack {payload['PhysicalResourceId']}, deleting....")
+                    delete_stack(payload)
+                    # wait for deletion to be completed before reporting back to CF
+                    wait_stack_states(
+                        delete_stack_success_states,
+                        delete_stack_failure_states,
+                        payload,
+                        context
+                    )
+                    return
+                else:
+                    respond_disabled_region(payload)
+                    return
             
     # lambda was invoked by itself
     if ('WaitComplete' in payload) and (payload['WaitComplete']):
@@ -174,6 +191,15 @@ def lambda_handler(payload, context):
             if payload['RequestType'] == 'Create':
                 stack_id = create_update_stack('create', payload)
             elif payload['RequestType'] == 'Update':
+                manage = stack_manage.StackManagement()
+                stack_id = payload['PhysicalResourceId']
+                region = payload['ResourceProperties']['Region']
+                # if update, could be that region just got enabled so stack does not exist
+                if not manage.stack_exists(region, stack_id):
+                    payload['RequestType'] = 'Create'
+                    lambda_handler(payload, context)
+                    return
+                
                 stack_id = create_update_stack('update', payload)
             elif payload['RequestType'] == 'Delete':
                 # delete needs to check if stack exists first, and reply with success if not
@@ -205,3 +231,15 @@ def lambda_handler(payload, context):
             cfn_response.response['Reason'] = str(e)
             cfn_response.respond()
             raise e
+
+
+def respond_disabled_region(payload):
+    cfn_response = cr_response.CustomResourceResponse(payload)
+    if 'PhysicalResourceId' in payload:
+        cfn_response.response['PhysicalResourceId'] = payload['PhysicalResourceId']
+    else:
+        id = f"Disabled{current_region.replace('-','')}{payload['ResourceProperties']['StackName']}"
+        cfn_response.response['PhysicalResourceId'] = id
+    cfn_response.response['Status'] = 'SUCCESS'
+    cfn_response.respond()
+    return
