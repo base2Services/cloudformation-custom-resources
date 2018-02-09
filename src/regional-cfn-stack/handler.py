@@ -25,8 +25,15 @@ update_stack_failure_states = ['CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_FAILED'
 delete_stack_failure_states = ['DELETE_FAILED']
 
 
+def respond_disabled_region(region, payload):
+    cfn_response = cr_response.CustomResourceResponse(payload)
+    payload['PhysicalResourceId'] = f"Disabled{region.replace('-','')}{payload['ResourceProperties']['StackName']}"
+    cfn_response.response['Status'] = 'SUCCESS'
+    cfn_response.respond()
+    return
+
+
 def create_update_stack(cmd, payload):
-    
     if 'Capabilities' not in payload['ResourceProperties']:
         payload['ResourceProperties']['Capabilities'] = 'CAPABILITY_IAM'
     
@@ -44,7 +51,7 @@ def create_update_stack(cmd, payload):
     on_failure = 'DELETE'
     if 'OnFailure' in payload['ResourceProperties']:
         on_failure = payload['ResourceProperties']['OnFailure']
-
+    
     stack_id = ''
     if cmd == 'create':
         stack_id = manage.create(
@@ -66,9 +73,8 @@ def create_update_stack(cmd, payload):
         )
     else:
         raise 'Cmd must be create or update'
-        
+    
     return stack_id
-
 
 
 def delete_stack(payload):
@@ -117,45 +123,26 @@ def wait_stack_states(success_states, failure_states, lambda_payload, lambda_con
 def lambda_handler(payload, context):
     # if lambda invoked to wait for stack status
     print(f"Received event:{json.dumps(payload)}")
-
-    # check if current region is elgiible for stack to be created
+    
+    # handle disable region situation
     if 'EnabledRegions' in payload['ResourceProperties']:
         region_list = payload['ResourceProperties']['EnabledRegions'].split(',')
         current_region = payload['ResourceProperties']['Region']
-        print (f"EnabledRegions: {region_list}. Current region={current_region}")
-
+        print(f"EnabledRegions: {region_list}. Current region={current_region}")
+        
         if current_region not in region_list:
             # if this is create request just skip
-            if payload['RequestType'] == 'Create':
+            if payload['RequestType'] == 'Create' or payload['RequestType'] == 'Update':
                 print(f"{current_region} not enabled, skipping")
-                # report success
-                respond_disabled_region(payload)
+                # report disabled
+                # in case of region disable (update), physical record changes, so cleanup delete request is
+                # sent subsequently via Cf, which will delete the stack
+                respond_disabled_region(current_region, payload)
                 return
-            
-            # use case: updated list of regions (removed element) when updating/deleting parent.
-            if payload['RequestType'] == 'Update' or payload['RequestType'] == 'Delete':
-                # if this is update or delete request we have to make sure stack is deleted if
-                # it was previously created
-                manage = stack_manage.StackManagement()
-                stack_id = payload['PhysicalResourceId']
-                region = payload['ResourceProperties']['Region']
-                if manage.stack_exists(region, stack_id):
-                    print(f"Received {payload['RequestType']} for disabled region {current_region}"
-                          f" and stack {payload['PhysicalResourceId']}, deleting....")
-                    delete_stack(payload)
-                    # wait for deletion to be completed before reporting back to CF
-                    wait_stack_states(
-                        delete_stack_success_states,
-                        delete_stack_failure_states,
-                        payload,
-                        context
-                    )
-                    return
-                else:
-                    respond_disabled_region(payload)
-                    return
-            
-    # lambda was invoked by itself
+        
+
+    
+    # lambda was invoked by itself, we just have to wait for stack operation to be completed
     if ('WaitComplete' in payload) and (payload['WaitComplete']):
         print("Waiting for stack status...")
         if payload['RequestType'] == 'Create':
@@ -187,35 +174,53 @@ def lambda_handler(payload, context):
         # depending on request type different handler is called
         print("Executing stack CRUD...")
         stack_id = None
+        if 'PhysicalResourceId' in payload:
+            stack_id = payload['PhysicalResourceId']
         try:
+            manage = stack_manage.StackManagement()
+            stack_name = payload['ResourceProperties']['StackName']
+            region = payload['ResourceProperties']['Region']
+            stack_exists = manage.stack_exists(region, stack_name)
+            
             if payload['RequestType'] == 'Create':
-                stack_id = create_update_stack('create', payload)
+                # stack exists, create request => update
+                # stack not exists, create request => create
+                if stack_exists:
+                    print(f"Create request came for {stack_name}, but it already exists in {region}, updating...")
+                    payload['RequestType'] = 'Update'
+                    lambda_handler(payload, context)
+                    return
+                else:
+                    stack_id = create_update_stack('create', payload)
+
             elif payload['RequestType'] == 'Update':
-                manage = stack_manage.StackManagement()
-                stack_id = payload['PhysicalResourceId']
-                region = payload['ResourceProperties']['Region']
-                # if update, could be that region just got enabled so stack does not exist
-                if not manage.stack_exists(region, stack_id):
+                # stack exists, update request => update
+                # stack not exists, update request => create
+                if stack_exists:
+                    stack_id = create_update_stack('update', payload)
+                else:
+                    print(f"Update request came for {stack_name}, but it does not exist in {region}, creating...")
                     payload['RequestType'] = 'Create'
                     lambda_handler(payload, context)
                     return
-                
-                stack_id = create_update_stack('update', payload)
+                    
             elif payload['RequestType'] == 'Delete':
-                # delete needs to check if stack exists first, and reply with success if not
-                manage = stack_manage.StackManagement()
-                stack_id = payload['PhysicalResourceId']
-                region = payload['ResourceProperties']['Region']
-                if not manage.stack_exists(region, stack_id):
+                # stack exists, delete request => delete
+                # stack not exists, delete request => report ok
+                # for delete we are interested in actual stack id
+                stack_exists = manage.stack_exists(region, stack_id)
+                if stack_exists:
+                    delete_stack(payload)
+                else:
                     # reply with success
+                    print(f"Delete request came for {stack_name}, but it is nowhere to be found...")
                     cfn_response = cr_response.CustomResourceResponse(payload)
                     cfn_response.response['Reason'] = 'CloudFormation stack has not been found, may be removed manually'
                     cfn_response.respond()
                     return
-                else:
-                    delete_stack(payload)
-                   
-            # add marker to wait for execution and exit
+            
+            # if haven't moved to other operation, set payloads stack id to created/updated stack and wait
+            # for appropriate stack status
             payload['PhysicalResourceId'] = stack_id
             payload['WaitComplete'] = True
             invoker = lambda_invoker.LambdaInvoker()
@@ -231,15 +236,3 @@ def lambda_handler(payload, context):
             cfn_response.response['Reason'] = str(e)
             cfn_response.respond()
             raise e
-
-
-def respond_disabled_region(payload):
-    cfn_response = cr_response.CustomResourceResponse(payload)
-    if 'PhysicalResourceId' in payload:
-        cfn_response.response['PhysicalResourceId'] = payload['PhysicalResourceId']
-    else:
-        id = f"Disabled{current_region.replace('-','')}{payload['ResourceProperties']['StackName']}"
-        cfn_response.response['PhysicalResourceId'] = id
-    cfn_response.response['Status'] = 'SUCCESS'
-    cfn_response.respond()
-    return
