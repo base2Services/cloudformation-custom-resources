@@ -97,5 +97,24 @@ Optional parameters:
 - `StackParam_Key` - Will pass value of this param down to stack's `Key` parameter
 - `OnFailure` - Behaviour on stack creation failure. Accepted values are `DO_NOTHING`,`ROLLBACK` and `DELETE`
 
+### Copy or unpack objects between S3 buckets
+
+This custom resource allows copying from source to destination s3 buckets. For source, if you provide prefix
+(without trailing slash), all objects under that prefix will be copied. Alternatively, if you provide s3 object
+with `*.zip` extensions, this object will be unpacked before it's files are unpacked to target bucket / prefix. 
+Please note that this lambda function design does not include recursive calls if lambda is timing out, thus it does not 
+permit mass file unpacking, but is rather designed for deployment of smaller files, such as client side web applications.
+
+handler: `src/s3-copy/handler.lambda_handler`
+runtime:  `python3.6`
+
+Required parameters:
+
+- `Source` - Source object/prefix/zip-file in `s3://bucket-name/path/to/prefix/or/object.zip` format
+- `Destination` - Destination bucket and prefix in `s3://bucket-name/destination-prefix` format
+
+No optional parameters. 
+
+
 
 
