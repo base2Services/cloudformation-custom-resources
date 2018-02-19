@@ -35,29 +35,33 @@ def lambda_handler(event, context):
     
     dst = {'Bucket': dst_param_match.group(1), 'Prefix': dst_prefix}
     
-    if event['RequestType'] == 'Delete':
-        logic.S3CopyLogic(context, type='clean', src=None, dst=dst).clean_destination()
-        lambda_response.respond()
-        return
-    
-    # if create request, generate physical id, both for create/update copy files
-    if event['RequestType'] == 'Create':
-        event['PhysicalResourceId'] = dst_param
-    
-    # check if source is prefix - than it is sync type
-    if src_prefix.endswith('/'):
-        src = {'Bucket': src_param_match.group(1), 'Prefix': src_prefix}
-        logic.S3CopyLogic(context, type='sync', src=src, dst=dst).copy()
-        lambda_response.respond()
-    # if prefix ends with zip, we need to unpack file first
-    elif src_prefix.endswith('.zip'):
-        src = {'Bucket': src_param_match.group(1), 'Key': src_prefix}
-        logic.S3CopyLogic(context, type='object-zip', src=src, dst=dst).copy()
-        lambda_response.respond()
-    # by default consider prefix as key - regular s3 object
-    else:
-        src = {'Bucket': src_param_match.group(1), 'Key': src_prefix}
-        logic.S3CopyLogic(context, type='object', src=src, dst=dst).copy()
-        lambda_response.respond()
-    
+    try:
+        if event['RequestType'] == 'Delete':
+            logic.S3CopyLogic(context, type='clean', src=None, dst=dst).clean_destination()
+            lambda_response.respond()
+            return
+        
+        # if create request, generate physical id, both for create/update copy files
+        if event['RequestType'] == 'Create':
+            event['PhysicalResourceId'] = dst_param
+        
+        # check if source is prefix - than it is sync type
+        if src_prefix.endswith('/'):
+            src = {'Bucket': src_param_match.group(1), 'Prefix': src_prefix}
+            logic.S3CopyLogic(context, type='sync', src=src, dst=dst).copy()
+            lambda_response.respond()
+        # if prefix ends with zip, we need to unpack file first
+        elif src_prefix.endswith('.zip'):
+            src = {'Bucket': src_param_match.group(1), 'Key': src_prefix}
+            logic.S3CopyLogic(context, type='object-zip', src=src, dst=dst).copy()
+            lambda_response.respond()
+        # by default consider prefix as key - regular s3 object
+        else:
+            src = {'Bucket': src_param_match.group(1), 'Key': src_prefix}
+            logic.S3CopyLogic(context, type='object', src=src, dst=dst).copy()
+            lambda_response.respond()
+    except Exception as e:
+        message = str(e)
+        lambda_response.respond_error(message)
+        
     return 'OK'
