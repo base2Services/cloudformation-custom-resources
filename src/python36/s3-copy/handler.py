@@ -25,6 +25,10 @@ def lambda_handler(event, context):
     src_param_match = re.match(r's3:\/\/(.*?)\/(.*)', src_param)
     dst_param_match = re.match(r's3:\/\/(.*?)\/(.*)', dst_param)
     
+    canned_acl = None
+    if 'CannedAcl' in cr_params:
+        canned_acl = cr_params['CannedAcl']
+    
     if src_param_match is None or dst_param_match is None:
         lambda_response.respond_error(f"Source/Destination must be in s3://bucket/key format")
         return
@@ -37,7 +41,7 @@ def lambda_handler(event, context):
     
     try:
         if event['RequestType'] == 'Delete':
-            logic.S3CopyLogic(context, type='clean', src=None, dst=dst).clean_destination()
+            logic.S3CopyLogic(context, type='clean', src=None, dst=dst, canned_acl=canned_acl).clean_destination()
             lambda_response.respond()
             return
         
@@ -48,17 +52,17 @@ def lambda_handler(event, context):
         # check if source is prefix - than it is sync type
         if src_prefix.endswith('/'):
             src = {'Bucket': src_param_match.group(1), 'Prefix': src_prefix}
-            logic.S3CopyLogic(context, type='sync', src=src, dst=dst).copy()
+            logic.S3CopyLogic(context, type='sync', src=src, dst=dst, canned_acl=canned_acl).copy()
             lambda_response.respond()
         # if prefix ends with zip, we need to unpack file first
         elif src_prefix.endswith('.zip'):
             src = {'Bucket': src_param_match.group(1), 'Key': src_prefix}
-            logic.S3CopyLogic(context, type='object-zip', src=src, dst=dst).copy()
+            logic.S3CopyLogic(context, type='object-zip', src=src, dst=dst, canned_acl=canned_acl).copy()
             lambda_response.respond()
         # by default consider prefix as key - regular s3 object
         else:
             src = {'Bucket': src_param_match.group(1), 'Key': src_prefix}
-            logic.S3CopyLogic(context, type='object', src=src, dst=dst).copy()
+            logic.S3CopyLogic(context, type='object', src=src, dst=dst, canned_acl=canned_acl).copy()
             lambda_response.respond()
     except Exception as e:
         message = str(e)
