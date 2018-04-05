@@ -10,9 +10,11 @@ import logic
 
 
 def lambda_handler(event, context):
+    
+    print(f"Received event:{json.dumps(payload)}")
+
     lambda_response = cr_response.CustomResourceResponse(event)
     cr_params = event['ResourceProperties']
-    
     # Validate input
     for key in ['Source', 'Destination']:
         if key not in cr_params:
