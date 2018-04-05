@@ -7,11 +7,11 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 import cr_response
 import logic
-
+import json
 
 def lambda_handler(event, context):
     
-    print(f"Received event:{json.dumps(payload)}")
+    print(f"Received event:{json.dumps(event)}")
 
     lambda_response = cr_response.CustomResourceResponse(event)
     cr_params = event['ResourceProperties']
