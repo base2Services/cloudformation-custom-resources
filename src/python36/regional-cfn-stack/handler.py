@@ -21,7 +21,7 @@ create_stack_failure_states = ['CREATE_FAILED',
                                'ROLLBACK_FAILED',
                                'DELETE_COMPLETE',
                                'ROLLBACK_COMPLETE']
-update_stack_failure_states = ['CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_FAILED', 'ROLLBACK_COMPLETE']
+update_stack_failure_states = ['CREATE_FAILED', 'DELETE_FAILED', 'UPDATE_FAILED', 'ROLLBACK_COMPLETE','UPDATE_ROLLBACK_COMPLETE']
 delete_stack_failure_states = ['DELETE_FAILED']
 
 
@@ -64,13 +64,18 @@ def create_update_stack(cmd, payload):
         )
     elif cmd == 'update':
         stack_id = payload['PhysicalResourceId']
-        manage.update(
+        result = manage.update(
             payload['ResourceProperties']['Region'],
             stack_id,
             payload['ResourceProperties']['TemplateUrl'],
             stack_params,
             payload['ResourceProperties']['Capabilities'].split(','),
         )
+        # no updates to be performed
+        if result is None:
+            cfn_response = cr_response.CustomResourceResponse(payload)
+            cfn_response.respond()
+            return None
     else:
         raise 'Cmd must be create or update'
     
@@ -139,8 +144,8 @@ def lambda_handler(payload, context):
                 # sent subsequently via Cf, which will delete the stack
                 respond_disabled_region(current_region, payload)
                 return
-        
-
+    
+    
     
     # lambda was invoked by itself, we just have to wait for stack operation to be completed
     if ('WaitComplete' in payload) and (payload['WaitComplete']):
@@ -192,18 +197,21 @@ def lambda_handler(payload, context):
                     return
                 else:
                     stack_id = create_update_stack('create', payload)
-
+            
             elif payload['RequestType'] == 'Update':
                 # stack exists, update request => update
                 # stack not exists, update request => create
                 if stack_exists:
                     stack_id = create_update_stack('update', payload)
+                    if stack_id is None:
+                        # no updates to be performed
+                        return
                 else:
                     print(f"Update request came for {stack_name}, but it does not exist in {region}, creating...")
                     payload['RequestType'] = 'Create'
                     lambda_handler(payload, context)
                     return
-                    
+            
             elif payload['RequestType'] == 'Delete':
                 # stack exists, delete request => delete
                 # stack not exists, delete request => report ok

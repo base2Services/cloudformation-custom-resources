@@ -112,7 +112,7 @@ Required parameters:
 
 - `Source` - Source object/prefix/zip-file in `s3://bucket-name/path/to/prefix/or/object.zip` format
 - `Destination` - Destination bucket and prefix in `s3://bucket-name/destination-prefix` format
-
+- `CannedAcl` - Canned ACL for created objects in destination
 No optional parameters. 
 
 

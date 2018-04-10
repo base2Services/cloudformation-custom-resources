@@ -28,3 +28,6 @@ build/Release
 node_modules
 
 dist/
+/src/python36/regional-cfn-stack/regional_test_stack.json
+/src/python36/regional-cfn-stack/test.json
+/src/python36/regional-cfn-stack/test.rb

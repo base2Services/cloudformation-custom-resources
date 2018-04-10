@@ -13,7 +13,7 @@ class S3CopyLogic:
     ### src - dict with Bucket and Key elements
     ### destination - dict with Bucket and Key elements
     ###
-    def __init__(self, context, type, src, dst):
+    def __init__(self, context, type, src, dst, canned_acl):
         self.context = context
         self.type = type
         self.src = src
@@ -22,6 +22,13 @@ class S3CopyLogic:
         self.local_download_path = f"/tmp/cache/{self.context.aws_request_id}"
         self.local_prefix_unzip = f"/tmp/cache/{self.context.aws_request_id}/unpacked"
         self.local_prefix = f"/tmp/cache/{self.context.aws_request_id}/upload"
+        self.canned_acl = canned_acl
+    
+    def apply_acl(self, s3_resource, path):
+        if self.canned_acl is not None:
+            logger.info(f"Apply canned acl {self.canned_acl} for {path}")
+            acl = s3_resource.ObjectAcl(self.dst['Bucket'], path)
+            acl.put(ACL=self.canned_acl)
     
     def copy(self):
         shutil.rmtree(self.local_download_path, ignore_errors=True)
@@ -102,7 +109,8 @@ class S3CopyLogic:
     
     # Upload files to destination
     def upload(self, path):
-        bucket = boto3.resource('s3').Bucket(self.dst['Bucket'])
+        s3_resource = boto3.resource('s3')
+        bucket = s3_resource.Bucket(self.dst['Bucket'])
         logger.info(f"Uploading from {path}")
         for local_path in glob.glob(f"{path}/**/*", recursive=True):
             if not os.path.isdir(local_path):
@@ -112,3 +120,4 @@ class S3CopyLogic:
                 destination_key += local_path.replace(f"{path}/", '')
                 logger.info(f"{local_path} -> s3://{self.dst['Bucket']}/{destination_key}")
                 bucket.upload_file(local_path, destination_key)
+                self.apply_acl(s3_resource,  destination_key)

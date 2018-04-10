@@ -38,7 +38,7 @@ class StackManagement:
                 return False
             else:
                 raise e
-        
+    
     def update(self, region, stack_id, url, params, capabilities):
         cfn_client = boto3.client('cloudformation', region_name=region)
         s_params = params
@@ -58,9 +58,12 @@ class StackManagement:
                 raise e
             if (not 'Message' in e.response['Error']):
                 raise e
-            if (not 'No updates are to be performed' in e.response['Error']['Message']):
+            if ('No updates are to be performed' in e.response['Error']['Message']):
+                print("No updates for stack {stack_id}")
+                return None
+            else:
                 raise e
-                
+        
         return stack_id
     
     def delete(self, region, stack_id):
@@ -74,7 +77,7 @@ class StackManagement:
         while True:
             stack_details = cfn_client.describe_stacks(StackName=stack_id)['Stacks'][0]
             stack_status = stack_details['StackStatus']
-
+            
             print(f"Stack status: {stack_status}")
             if stack_status in success_states:
                 print(f"Matched {stack_status} - OK ")
@@ -89,7 +92,7 @@ class StackManagement:
                 print(f"Waiting for 5 seconds, time remaining" +
                       f"in this lambda execution {lambda_context.get_remaining_time_in_millis()}ms")
                 time.sleep(5)
-
+    
     def get_failure_reason(self, region, stack_id):
         """
         Get stack failure reason by reading stack events. Any event with status
