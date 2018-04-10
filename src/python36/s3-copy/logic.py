@@ -4,12 +4,16 @@ import zipfile
 import glob
 import logging
 import shutil
+import magic
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
+
 class S3CopyLogic:
+    
+    
     ### src - dict with Bucket and Key elements
     ### destination - dict with Bucket and Key elements
     ###
@@ -23,7 +27,9 @@ class S3CopyLogic:
         self.local_prefix_unzip = f"/tmp/cache/{self.context.aws_request_id}/unpacked"
         self.local_prefix = f"/tmp/cache/{self.context.aws_request_id}/upload"
         self.canned_acl = canned_acl
-    
+        self.mime = magic.Magic(mime=True)
+
+
     def apply_acl(self, s3_resource, path):
         if self.canned_acl is not None:
             logger.info(f"Apply canned acl {self.canned_acl} for {path}")
@@ -110,14 +116,21 @@ class S3CopyLogic:
     # Upload files to destination
     def upload(self, path):
         s3_resource = boto3.resource('s3')
+        s3_client = boto3.client('s3')
         bucket = s3_resource.Bucket(self.dst['Bucket'])
         logger.info(f"Uploading from {path}")
         for local_path in glob.glob(f"{path}/**/*", recursive=True):
             if not os.path.isdir(local_path):
+                content_type = self.mime.from_file(local_path)
                 destination_key = self.dst['Prefix']
                 if not destination_key[-1] == '/':
                     destination_key += '/'
                 destination_key += local_path.replace(f"{path}/", '')
                 logger.info(f"{local_path} -> s3://{self.dst['Bucket']}/{destination_key}")
-                bucket.upload_file(local_path, destination_key)
+                bucket.upload_file(local_path, destination_key, ExtraArgs={
+                    "Metadata": {
+                        "Content-Type": content_type
+                    }
+                })
                 self.apply_acl(s3_resource,  destination_key)
+                
